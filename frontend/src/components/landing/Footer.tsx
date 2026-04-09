@@ -47,7 +47,7 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-8">
           {/* Logo */}
           <div className="flex items-center">
-            <Logo height={24} />
+            <Logo height={40} />
           </div>
 
           {/* Links */}

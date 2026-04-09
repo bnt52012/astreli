@@ -35,7 +35,7 @@ export default function Hero() {
           transition={{ duration: 0.8, delay: 0.1 }}
           className="mb-10 flex justify-center"
         >
-          <Logo height={48} />
+          <Logo height={120} />
         </motion.div>
 
         <motion.p

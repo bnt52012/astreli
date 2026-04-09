@@ -286,7 +286,7 @@ function Sidebar({
         {/* Logo */}
         <div className="px-6 h-16 flex items-center border-b border-[#E5E0D8]">
           <a href="/" className="flex items-center group">
-            <Logo height={24} />
+            <Logo height={40} />
           </a>
         </div>
 
@@ -1327,7 +1327,7 @@ function GeneratePageContent() {
           </svg>
         </button>
         <span className="ml-3">
-          <Logo height={20} />
+          <Logo height={32} />
         </span>
       </div>
 

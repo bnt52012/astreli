@@ -1,23 +1,21 @@
 import Image from "next/image";
 
 interface LogoProps {
-  /** Height in pixels — width scales proportionally */
+  /** Height in pixels — width scales proportionally (1:1 source) */
   height?: number;
   className?: string;
 }
 
 /**
  * Astreli logo image component.
- * Original aspect ratio is ~5:1 (467×93).
+ * Source is 1024×1024 (square — includes icon + wordmark).
  */
-export default function Logo({ height = 32, className }: LogoProps) {
-  const width = Math.round(height * (467 / 93));
-
+export default function Logo({ height = 40, className }: LogoProps) {
   return (
     <Image
       src="/logo.png"
       alt="Astreli"
-      width={width}
+      width={height}
       height={height}
       className={className}
       priority

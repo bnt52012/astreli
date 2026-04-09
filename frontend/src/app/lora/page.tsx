@@ -22,7 +22,7 @@ function Sidebar() {
       {/* Logo */}
       <div className="px-8 py-8">
         <Link href="/" className="block">
-          <Logo height={24} />
+          <Logo height={40} />
         </Link>
       </div>
 

@@ -25,7 +25,7 @@ export default function Header() {
       <div className="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo */}
         <a href="/" className="flex items-center group">
-          <Logo height={28} />
+          <Logo height={44} />
         </a>
 
         {/* Right nav */}
