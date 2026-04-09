@@ -1,5 +1,7 @@
 "use client";
 
+import Logo from "@/components/Logo";
+
 const LINKS = [
   { label: "About", href: "/about" },
   { label: "Pricing", href: "/pricing" },
@@ -44,13 +46,8 @@ export default function Footer() {
       <div className="max-w-[1200px] mx-auto px-6">
         <div className="flex flex-col md:flex-row items-center justify-between gap-8">
           {/* Logo */}
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-semibold tracking-[0.08em] text-[#1A1A1A] uppercase">
-              Astreli
-            </span>
-            <span className="text-[9px] text-[#C4A265] font-medium tracking-widest uppercase mt-0.5">
-              .ai
-            </span>
+          <div className="flex items-center">
+            <Logo height={24} />
           </div>
 
           {/* Links */}

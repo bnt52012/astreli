@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { getLoraModels, deleteLora } from "@/lib/api";
 import type { LoRAModel } from "@/lib/api";
+import Logo from "@/components/Logo";
 
 // ── Sidebar ─────────────────────────────────────────────────────────────
 
@@ -21,9 +22,7 @@ function Sidebar() {
       {/* Logo */}
       <div className="px-8 py-8">
         <Link href="/" className="block">
-          <span className="text-xl font-light tracking-[0.15em] text-[#1A1A1A]">
-            Astreli
-          </span>
+          <Logo height={24} />
         </Link>
       </div>
 

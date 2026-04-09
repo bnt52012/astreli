@@ -5,6 +5,10 @@ export const metadata: Metadata = {
   title: "Astreli — AI-Powered Advertising",
   description:
     "From scenario to broadcast-ready video in minutes. Astreli replaces traditional ad shoots with a 100% AI pipeline.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
   openGraph: {
     title: "Astreli — AI-Powered Advertising",
     description:

@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Logo from "@/components/Logo";
 
 export default function Hero() {
   return (
@@ -28,6 +29,15 @@ export default function Hero() {
 
       {/* Content */}
       <div className="relative z-10 max-w-[1200px] mx-auto px-6 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.1 }}
+          className="mb-10 flex justify-center"
+        >
+          <Logo height={48} />
+        </motion.div>
+
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

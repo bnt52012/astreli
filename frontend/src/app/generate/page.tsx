@@ -15,6 +15,7 @@ import {
   type LoRAModel,
   type GenerateRequest,
 } from "@/lib/api";
+import Logo from "@/components/Logo";
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -284,13 +285,8 @@ function Sidebar({
       >
         {/* Logo */}
         <div className="px-6 h-16 flex items-center border-b border-[#E5E0D8]">
-          <a href="/" className="flex items-center gap-2 group">
-            <span className="text-xl font-semibold tracking-[0.08em] text-[#1A1A1A] uppercase">
-              Astreli
-            </span>
-            <span className="text-[10px] text-[#C4A265] font-medium tracking-widest uppercase mt-0.5">
-              .ai
-            </span>
+          <a href="/" className="flex items-center group">
+            <Logo height={24} />
           </a>
         </div>
 
@@ -1330,8 +1326,8 @@ function GeneratePageContent() {
             />
           </svg>
         </button>
-        <span className="ml-3 text-sm font-medium text-[#1A1A1A] tracking-wide uppercase">
-          Astreli
+        <span className="ml-3">
+          <Logo height={20} />
         </span>
       </div>
 
