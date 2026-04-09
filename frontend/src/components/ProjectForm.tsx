@@ -87,7 +87,6 @@ export default function ProjectForm({ onCreated }: Props) {
             background: "var(--bg-card)",
             border: "1px solid var(--border)",
             color: "var(--text-primary)",
-            focusRingColor: "var(--accent-purple)",
           }}
         />
       </div>

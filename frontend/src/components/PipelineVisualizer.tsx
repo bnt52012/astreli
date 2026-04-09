@@ -56,7 +56,7 @@ export default function PipelineVisualizer({ state }: { state: PipelineUpdate | 
                   borderColor: isDone || isActive ? color : "var(--border)",
                   borderWidth: 2,
                   color: isDone || isActive ? color : "var(--text-muted)",
-                  ringColor: isActive ? color : undefined,
+                  ...( isActive ? { "--tw-ring-color": color } as React.CSSProperties : {}),
                 }}
               >
                 {isDone ? "✓" : i + 1}

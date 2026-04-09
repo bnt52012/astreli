@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { clsx } from "clsx";
@@ -1108,6 +1108,14 @@ function Step5Result({
 // ── Main Page ───────────────────────────────────────────────────────
 
 export default function GeneratePage() {
+  return (
+    <Suspense fallback={null}>
+      <GeneratePageContent />
+    </Suspense>
+  );
+}
+
+function GeneratePageContent() {
   const searchParams = useSearchParams();
 
   // Step state

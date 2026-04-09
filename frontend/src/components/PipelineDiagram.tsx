@@ -74,7 +74,12 @@ const STEPS = {
   },
 };
 
-const Node = ({ step, isActive, onClick, x, y, w, h }) => {
+type StepKey = keyof typeof STEPS;
+
+const Node = ({ step, isActive, onClick, x, y, w, h }: {
+  step: StepKey; isActive: boolean; onClick: (s: StepKey) => void;
+  x: number; y: number; w: number; h: number;
+}) => {
   const s = STEPS[step];
   return (
     <g
@@ -122,7 +127,10 @@ const Node = ({ step, isActive, onClick, x, y, w, h }) => {
   );
 };
 
-const Arrow = ({ x1, y1, x2, y2, label, labelOffset, color = "#444466" }) => {
+const Arrow = ({ x1, y1, x2, y2, label, labelOffset, color = "#444466" }: {
+  x1: number; y1: number; x2: number; y2: number;
+  label?: string; labelOffset?: { x?: number; y?: number }; color?: string;
+}) => {
   const midY = (y1 + y2) / 2;
   return (
     <g>
@@ -151,7 +159,9 @@ const Arrow = ({ x1, y1, x2, y2, label, labelOffset, color = "#444466" }) => {
   );
 };
 
-const StraightArrow = ({ x1, y1, x2, y2, color = "#444466" }) => (
+const StraightArrow = ({ x1, y1, x2, y2, color = "#444466" }: {
+  x1: number; y1: number; x2: number; y2: number; color?: string;
+}) => (
   <line
     x1={x1} y1={y1} x2={x2} y2={y2}
     stroke={color} strokeWidth="1.5"
@@ -160,7 +170,7 @@ const StraightArrow = ({ x1, y1, x2, y2, color = "#444466" }) => (
 );
 
 export default function PipelineDiagram() {
-  const [active, setActive] = useState("detect");
+  const [active, setActive] = useState<StepKey>("detect");
 
   const detail = STEPS[active];
 
