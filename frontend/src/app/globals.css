@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #FAFAF8;
+  --color-cream-dark: #F0EDE8;
+  --color-ink: #1A1A1A;
+  --color-ink-light: #4A4A4A;
+  --color-ink-muted: #8A8A8A;
+  --color-gold: #C4A265;
+  --color-gold-light: #D4B87A;
+  --color-gold-dark: #A8884F;
+  --color-border: #E5E0D8;
+  --color-border-light: #EEEBE5;
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap");
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-cream);
+  color: var(--color-ink);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-ink-muted); }
+
+/* Selection color */
+::selection {
+  background-color: var(--color-gold);
+  color: white;
+}

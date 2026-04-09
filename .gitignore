@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Environment & secrets
+.env
+.env.local
+.env.production
+
+# Dataset (too large for git)
+dataset/
+
+# Temp / output
+/tmp/
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+.claude/
+*.swp
+*.swo
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# Logs
+*.log

@@ -1,0 +1,28 @@
+# ── Core Framework ──────────────────────────────────────────
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic-settings==2.7.1
+python-multipart==0.0.20
+
+# ── Database ────────────────────────────────────────────────
+sqlalchemy[asyncio]==2.0.36
+aiosqlite==0.20.0
+
+# ── AI APIs ─────────────────────────────────────────────────
+openai==1.58.1            # GPT-4o scenario analysis
+google-genai==1.1.0       # Nano Banana 2 (Gemini) image generation
+replicate>=1.0.0          # LoRA SDXL + Inpainting on Replicate
+PyJWT==2.10.1             # Kling AI JWT authentication
+
+# ── HTTP & Networking ───────────────────────────────────────
+httpx==0.28.1             # Async HTTP client with retry transport
+
+# ── Image Processing ───────────────────────────────────────
+Pillow>=10.0.0            # Image loading, resizing, color extraction
+
+# ── Web Scraping ───────────────────────────────────────────
+beautifulsoup4>=4.12.0    # HTML parsing for brand website analysis
+
+# ── Testing ─────────────────────────────────────────────────
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
