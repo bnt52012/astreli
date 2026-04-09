@@ -1,4 +1,3 @@
-import Header from "@/components/landing/Header";
 import Hero from "@/components/landing/Hero";
 import BrandAnalysis from "@/components/landing/BrandAnalysis";
 import SocialProof from "@/components/landing/SocialProof";
@@ -12,7 +11,6 @@ import Footer from "@/components/landing/Footer";
 export default function Home() {
   return (
     <>
-      <Header />
       <main>
         <Hero />
         <BrandAnalysis />

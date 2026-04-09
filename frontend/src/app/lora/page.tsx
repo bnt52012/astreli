@@ -5,64 +5,6 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { getLoraModels, deleteLora } from "@/lib/api";
 import type { LoRAModel } from "@/lib/api";
-import Logo from "@/components/Logo";
-
-// ── Sidebar ─────────────────────────────────────────────────────────────
-
-function Sidebar() {
-  const navItems = [
-    { label: "New Project", href: "/generate", active: false, disabled: false },
-    { label: "My Videos", href: "#", active: false, disabled: true },
-    { label: "LoRA Models", href: "/lora", active: true, disabled: false },
-    { label: "Settings", href: "#", active: false, disabled: true },
-  ];
-
-  return (
-    <aside className="fixed left-0 top-0 bottom-0 w-[280px] bg-white border-r border-[#E5E0D8] flex flex-col z-50">
-      {/* Logo */}
-      <div className="px-8 py-8">
-        <Link href="/" className="block">
-          <Logo height={40} />
-        </Link>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 px-4 space-y-1">
-        {navItems.map((item) => (
-          <Link
-            key={item.label}
-            href={item.disabled ? "#" : item.href}
-            className={`
-              flex items-center px-4 py-3 text-sm transition-colors relative
-              ${item.active
-                ? "text-[#1A1A1A] font-medium bg-[#FAFAF8]"
-                : item.disabled
-                  ? "text-[#8A8A8A] cursor-not-allowed"
-                  : "text-[#4A4A4A] hover:text-[#1A1A1A] hover:bg-[#FAFAF8]"
-              }
-            `}
-            onClick={item.disabled ? (e) => e.preventDefault() : undefined}
-          >
-            {item.active && (
-              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-[#C4A265] rounded-r" />
-            )}
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-
-      {/* User */}
-      <div className="px-8 py-6 border-t border-[#E5E0D8]">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-[#C4A265] flex items-center justify-center text-white text-xs font-medium">
-            AB
-          </div>
-          <span className="text-sm text-[#4A4A4A]">Account</span>
-        </div>
-      </div>
-    </aside>
-  );
-}
 
 // ── Confirmation Dialog ─────────────────────────────────────────────────
 
@@ -175,7 +117,7 @@ export default function LoRAPage() {
       const data = await getLoraModels();
       setModels(data);
     } catch {
-      // API not available yet — that's fine
+      // API not available yet
     } finally {
       setModelsLoading(false);
     }
@@ -246,14 +188,12 @@ export default function LoRAPage() {
     setTrainingState("training");
     setTrainingProgress(0);
 
-    // Fire the API call (non-blocking, OK if it fails in demo)
     fetch("/api/lora/train", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model_name: modelName.trim() }),
     }).catch(() => {});
 
-    // Simulate progress over ~20 seconds
     const interval = setInterval(() => {
       setTrainingProgress((prev) => {
         if (prev >= 100) {
@@ -273,7 +213,7 @@ export default function LoRAPage() {
       await deleteLora(model.model_id);
       setModels((prev) => prev.filter((m) => m.model_id !== model.model_id));
     } catch {
-      // Silently fail for now
+      // Silently fail
     }
     setDeleteTarget(null);
   };
@@ -285,11 +225,9 @@ export default function LoRAPage() {
 
   return (
     <div className="min-h-screen bg-[#FAFAF8]" style={{ fontFamily: "Inter, sans-serif" }}>
-      <Sidebar />
-
-      {/* Main content */}
-      <main className="ml-[280px] min-h-screen">
-        <div className="max-w-4xl mx-auto px-12 py-16 space-y-16">
+      {/* Main content — full width, centered */}
+      <main className="min-h-screen">
+        <div className="max-w-[1000px] mx-auto px-6 py-12 space-y-16">
           {/* ── Section 1: Header ────────────────────────────────── */}
           <motion.section
             initial={{ opacity: 0, y: 20 }}
@@ -348,7 +286,7 @@ export default function LoRAPage() {
             {/* Image Preview Grid */}
             {photos.length > 0 && (
               <div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-4">
                   <AnimatePresence>
                     {photos.map((photo, index) => (
                       <motion.div

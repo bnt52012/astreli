@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import NavBar from "@/components/NavBar";
 
 export const metadata: Metadata = {
   title: "Astreli — AI-Powered Advertising",
@@ -38,7 +39,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className="min-h-screen antialiased bg-[#FAFAF8]" style={{ fontFamily: "Inter, sans-serif" }}>
+        <NavBar />
+        <div className="pt-16">{children}</div>
+      </body>
     </html>
   );
 }

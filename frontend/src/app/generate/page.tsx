@@ -15,7 +15,6 @@ import {
   type LoRAModel,
   type GenerateRequest,
 } from "@/lib/api";
-import Logo from "@/components/Logo";
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -224,112 +223,67 @@ function OutlineButton({
   );
 }
 
-// ── Step Indicator ──────────────────────────────────────────────────
+// ── Step Indicator (horizontal pills) ───────────────────────────────
 
-function StepIndicator({ current, total }: { current: number; total: number }) {
+const STEP_LABELS = ["Brand Setup", "Scenario", "Scenes", "Generate", "Result"];
+
+function StepIndicator({ current }: { current: number; total?: number }) {
   return (
-    <div className="flex items-center gap-3 mb-8">
-      <span className="text-xs font-medium text-[#8A8A8A] tracking-wide uppercase">
-        Step {current} of {total}
-      </span>
-      <div className="flex gap-1.5">
-        {Array.from({ length: total }, (_, i) => (
-          <div
-            key={i}
-            className={clsx(
-              "h-1.5 rounded-full transition-all duration-500",
-              i + 1 === current
-                ? "w-6 bg-[#C4A265]"
-                : i + 1 < current
-                  ? "w-3 bg-[#C4A265]/50"
-                  : "w-3 bg-[#E5E0D8]",
-            )}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Sidebar ─────────────────────────────────────────────────────────
-
-function Sidebar({
-  mobileOpen,
-  onClose,
-}: {
-  mobileOpen: boolean;
-  onClose: () => void;
-}) {
-  const navItems = [
-    { label: "New Project", href: "/generate", active: true },
-    { label: "My Videos", href: "#", disabled: true },
-    { label: "LoRA Models", href: "/lora", disabled: false },
-    { label: "Settings", href: "#", disabled: true },
-  ];
-
-  return (
-    <>
-      {/* Mobile overlay */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/20 z-40 lg:hidden"
-          onClick={onClose}
-        />
-      )}
-
-      <aside
-        className={clsx(
-          "fixed top-0 left-0 h-full w-[280px] bg-white border-r border-[#E5E0D8] z-50 flex flex-col transition-transform duration-300 lg:translate-x-0",
-          mobileOpen ? "translate-x-0" : "-translate-x-full",
-        )}
-      >
-        {/* Logo */}
-        <div className="px-6 h-16 flex items-center border-b border-[#E5E0D8]">
-          <a href="/" className="flex items-center group">
-            <Logo height={40} />
-          </a>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 py-6 px-3">
-          <ul className="space-y-1">
-            {navItems.map((item) => (
-              <li key={item.label}>
-                <a
-                  href={item.disabled ? undefined : item.href}
-                  onClick={(e) => {
-                    if (item.disabled) e.preventDefault();
-                    onClose();
-                  }}
+    <div className="mb-12">
+      <div className="flex items-center justify-center">
+        {STEP_LABELS.map((label, i) => {
+          const step = i + 1;
+          const isActive = step === current;
+          const isDone = step < current;
+          return (
+            <div key={label} className="flex items-center">
+              {/* Step pill */}
+              <div className="flex items-center gap-2.5">
+                <div
                   className={clsx(
-                    "flex items-center px-4 py-2.5 rounded-md text-sm transition-all duration-200",
-                    item.active
-                      ? "border-l-2 border-[#C4A265] bg-[#FAFAF8] text-[#1A1A1A] font-medium"
-                      : item.disabled
-                        ? "text-[#8A8A8A] cursor-not-allowed"
-                        : "text-[#4A4A4A] hover:text-[#1A1A1A] hover:bg-[#FAFAF8]",
+                    "w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all duration-300 shrink-0",
+                    isActive
+                      ? "bg-[#C4A265] text-white"
+                      : isDone
+                        ? "bg-[#C4A265]/20 text-[#C4A265]"
+                        : "bg-[#E5E0D8] text-[#8A8A8A]",
                   )}
                 >
-                  {item.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        {/* User section */}
-        <div className="px-6 py-4 border-t border-[#E5E0D8]">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#1A1A1A] flex items-center justify-center">
-              <span className="text-[11px] font-medium text-[#FAFAF8]">
-                AB
-              </span>
+                  {isDone ? (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    step
+                  )}
+                </div>
+                <span
+                  className={clsx(
+                    "text-xs font-medium tracking-wide hidden sm:block transition-colors duration-300",
+                    isActive
+                      ? "text-[#1A1A1A]"
+                      : isDone
+                        ? "text-[#C4A265]"
+                        : "text-[#8A8A8A]",
+                  )}
+                >
+                  {label}
+                </span>
+              </div>
+              {/* Connector line */}
+              {i < STEP_LABELS.length - 1 && (
+                <div
+                  className={clsx(
+                    "w-8 sm:w-12 h-[1px] mx-2 sm:mx-3 transition-colors duration-300",
+                    step < current ? "bg-[#C4A265]" : "bg-[#E5E0D8]",
+                  )}
+                />
+              )}
             </div>
-            <span className="text-sm text-[#4A4A4A]">Account</span>
-          </div>
-        </div>
-      </aside>
-    </>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -1117,9 +1071,6 @@ function GeneratePageContent() {
   // Step state
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Sidebar
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
   // Step 1 state
   const [brandName, setBrandName] = useState(searchParams.get("brand") || "");
   const [productName, setProductName] = useState("");
@@ -1304,39 +1255,10 @@ function GeneratePageContent() {
 
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
-      <Sidebar mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-      {/* Mobile header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-[#E5E0D8] z-30 flex items-center px-4">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="text-[#1A1A1A] p-1"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1.5}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"
-            />
-          </svg>
-        </button>
-        <span className="ml-3">
-          <Logo height={32} />
-        </span>
-      </div>
-
-      {/* Main content */}
-      <main className="lg:ml-[280px] min-h-screen">
-        <div className="max-w-3xl mx-auto px-6 py-12 pt-20 lg:pt-12">
-          {currentStep <= 3 && (
-            <StepIndicator current={currentStep} total={5} />
-          )}
+      {/* Main content — full width, centered */}
+      <main className="min-h-screen">
+        <div className="max-w-[1000px] mx-auto px-6 py-12">
+          <StepIndicator current={currentStep} />
 
           <AnimatePresence mode="wait">
             {currentStep === 1 && (
