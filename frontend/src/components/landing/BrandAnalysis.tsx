@@ -23,6 +23,14 @@ export default function BrandAnalysis() {
 
       if (res.ok) {
         const data = await res.json();
+        // Persist FULL brand analysis (colors, tone, keywords, mood, prompt_prefix)
+        // so /generate can inject it into scenario analysis + image/video prompts.
+        try {
+          sessionStorage.setItem("astreli_brand_analysis", JSON.stringify(data));
+          console.log("[BrandAnalysis] persisted to sessionStorage:", data);
+        } catch (e) {
+          console.warn("[BrandAnalysis] failed to persist:", e);
+        }
         const params = new URLSearchParams({
           brand: data.brand_name || "",
           industry: data.industry || "",

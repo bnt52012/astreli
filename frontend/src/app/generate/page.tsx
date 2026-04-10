@@ -14,7 +14,18 @@ import {
   type SceneBreakdown,
   type LoRAModel,
   type GenerateRequest,
+  type BrandAnalysis,
 } from "@/lib/api";
+
+// Map a platform string to a target aspect ratio
+function platformsToAspectRatio(platforms: string[]): string {
+  const p = platforms.map((s) => s.toLowerCase());
+  if (p.some((x) => x.includes("reel") || x.includes("tiktok") || x.includes("short") || x.includes("story")))
+    return "9:16";
+  if (p.some((x) => x.includes("linkedin") || x.includes("square") || x.includes("post"))) return "1:1";
+  if (p.some((x) => x.includes("youtube") || x.includes("16:9") || x.includes("landscape"))) return "16:9";
+  return "9:16";
+}
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -1074,11 +1085,14 @@ function GeneratePageContent() {
   // Step 1 state
   const [brandName, setBrandName] = useState(searchParams.get("brand") || "");
   const [productName, setProductName] = useState("");
-  const [productCategory, setProductCategory] = useState("");
+  const [productCategory, setProductCategory] = useState(searchParams.get("industry") || "");
   const [productImages, setProductImages] = useState<File[]>([]);
   const [brandLogo, setBrandLogo] = useState<File | null>(null);
   const [loraModelId, setLoraModelId] = useState("");
   const [loraModels, setLoraModels] = useState<LoRAModel[]>([]);
+
+  // Brand analysis (from landing page /api/analyze-brand) — propagates to scenario + generate
+  const [brandAnalysis, setBrandAnalysis] = useState<BrandAnalysis | null>(null);
 
   // Step 2 state
   const [scenario, setScenario] = useState("");
@@ -1110,6 +1124,23 @@ function GeneratePageContent() {
       .catch(() => {});
   }, []);
 
+  // Hydrate brand analysis from sessionStorage (set by landing page BrandAnalysis component)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = sessionStorage.getItem("astreli_brand_analysis");
+      if (!raw) return;
+      const data = JSON.parse(raw) as BrandAnalysis;
+      setBrandAnalysis(data);
+      if (data.brand_name && !brandName) setBrandName(data.brand_name);
+      if (data.industry && !productCategory) setProductCategory(data.industry);
+      console.log("[generate] hydrated brand analysis from sessionStorage:", data);
+    } catch (e) {
+      console.warn("[generate] failed to hydrate brand analysis:", e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Cleanup polling
   useEffect(() => {
     return () => {
@@ -1123,15 +1154,27 @@ function GeneratePageContent() {
     setAnalyzing(true);
     try {
       const mode = loraModelId ? "mannequin" : "product";
-      const result: SceneBreakdown = await analyzeScenario(
+      const params = {
         scenario,
         mode,
-        productCategory || "luxury",
+        industry: productCategory || brandAnalysis?.industry || "luxury",
+        brand_name: brandName || brandAnalysis?.brand_name || undefined,
+        duration,
+        platforms,
+        brand_colors: brandAnalysis?.colors,
+        brand_mood: brandAnalysis?.tone || brandAnalysis?.mood,
+        brand_keywords: brandAnalysis?.keywords,
+      };
+      console.log("[generate] analyzeScenario request:", params);
+      const result: SceneBreakdown = await analyzeScenario(params);
+      console.log(
+        `[generate] analyzeScenario response: ${result.scenes.length} scenes, total ${result.total_duration}s`,
+        result,
       );
       setScenes(result.scenes);
       setCurrentStep(3);
     } catch (err) {
-      console.error("Analyze failed:", err);
+      console.error("[generate] Analyze failed:", err);
       // Fallback: create a placeholder scene so the user can continue
       setScenes([
         {
@@ -1147,7 +1190,7 @@ function GeneratePageContent() {
     } finally {
       setAnalyzing(false);
     }
-  }, [scenario, loraModelId, productCategory]);
+  }, [scenario, loraModelId, productCategory, brandName, brandAnalysis, duration, platforms]);
 
   const handleGenerate = useCallback(async () => {
     setCurrentStep(4);
@@ -1168,10 +1211,22 @@ function GeneratePageContent() {
       const productImagesB64 = await Promise.all(productImages.map(fileToDataURL));
       const brandLogoB64 = brandLogo ? await fileToDataURL(brandLogo) : undefined;
 
+      const aspect_ratio = platformsToAspectRatio(platforms);
+      const brand_prompt_prefix = brandAnalysis
+        ? [
+            brandAnalysis.tone ? `${brandAnalysis.tone} aesthetic` : null,
+            brandAnalysis.keywords && brandAnalysis.keywords.length > 0
+              ? brandAnalysis.keywords.slice(0, 5).join(", ")
+              : null,
+          ]
+            .filter(Boolean)
+            .join(". ")
+        : undefined;
+
       const req: GenerateRequest = {
         brand_name: brandName,
         product_name: productName,
-        product_category: productCategory || "luxury",
+        product_category: productCategory || brandAnalysis?.industry || "luxury",
         scenario,
         scenes,
         platforms,
@@ -1179,7 +1234,16 @@ function GeneratePageContent() {
         lora_model_id: loraModelId || undefined,
         product_images: productImagesB64,
         brand_logo: brandLogoB64,
+        brand_colors: brandAnalysis?.colors,
+        brand_mood: brandAnalysis?.tone || brandAnalysis?.mood,
+        brand_prompt_prefix,
+        aspect_ratio,
       };
+      console.log("[generate] generateVideo request:", {
+        ...req,
+        product_images: `[${productImagesB64.length} images]`,
+        brand_logo: brandLogoB64 ? "[logo]" : undefined,
+      });
       const { job_id } = await generateVideo(req);
       setJobId(job_id);
 
@@ -1232,6 +1296,7 @@ function GeneratePageContent() {
     loraModelId,
     productImages,
     brandLogo,
+    brandAnalysis,
   ]);
 
   const handleNewProject = useCallback(() => {

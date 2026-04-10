@@ -271,6 +271,9 @@ class ScenarioAnalyzeRequest(BaseModel):
     brand_name: Optional[str] = None
     duration: int = 30
     platforms: List[str] = []
+    brand_colors: List[str] = []
+    brand_mood: Optional[str] = None
+    brand_keywords: List[str] = []
 
     @validator("mode")
     def validate_mode(cls, v):
@@ -537,7 +540,11 @@ async def analyze_scenario(request: ScenarioAnalyzeRequest):
         pass
 
     # 5. Build system prompt with knowledge context
-    from services.scenario.prompts import SYSTEM_PROMPT_MIXED, SYSTEM_PROMPT_PRODUCT_ONLY
+    from services.scenario.prompts import (
+        SYSTEM_PROMPT_MIXED,
+        SYSTEM_PROMPT_PRODUCT_ONLY,
+        build_scenario_user_prompt,
+    )
     base_prompt = (
         SYSTEM_PROMPT_MIXED if request.mode == "personnage_et_produit"
         else SYSTEM_PROMPT_PRODUCT_ONLY
@@ -546,9 +553,29 @@ async def analyze_scenario(request: ScenarioAnalyzeRequest):
         f"{base_prompt}\n\n"
         f"INDUSTRY KNOWLEDGE:\n{pattern_context}\n\n"
         f"{brand_context}\n\n"
-        f"{rag_examples}\n\n"
-        f"TARGET DURATION: ~{request.duration} seconds."
+        f"{rag_examples}"
     )
+
+    # Build the runtime user prompt that injects brand/duration/platform/aspect
+    user_prompt = build_scenario_user_prompt(
+        request.scenario,
+        brand_name=request.brand_name,
+        industry=industry,
+        duration=request.duration,
+        platforms=request.platforms,
+        brand_colors=request.brand_colors,
+        brand_mood=request.brand_mood,
+        brand_keywords=request.brand_keywords,
+    )
+
+    logger.info(
+        "[analyze-scenario] mode=%s industry=%s brand=%s duration=%ds platforms=%s "
+        "colors=%s mood=%s",
+        request.mode, industry, request.brand_name, request.duration,
+        request.platforms, request.brand_colors, request.brand_mood,
+    )
+    logger.debug("[analyze-scenario] system_prompt=\n%s", system_prompt)
+    logger.debug("[analyze-scenario] user_prompt=\n%s", user_prompt)
 
     # 6. Call GPT-4o
     try:
@@ -561,17 +588,23 @@ async def analyze_scenario(request: ScenarioAnalyzeRequest):
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": request.scenario},
+                {"role": "user", "content": user_prompt},
             ],
         )
         raw_content = resp.choices[0].message.content or "{}"
         parsed = json_mod.loads(raw_content)
         logger.info(
-            "GPT-4o returned %d scenes (total_scenes=%s, estimated_duration=%s)",
+            "[analyze-scenario] GPT-4o returned %d scenes (total_scenes=%s, estimated_duration=%s)",
             len(parsed.get("scenes", [])),
             parsed.get("total_scenes", "?"),
             parsed.get("estimated_duration", "?"),
         )
+        # Hard guard: if GPT-4o returned fewer than 3 scenes, log and let downstream handle it
+        if len(parsed.get("scenes", [])) < 3:
+            logger.warning(
+                "[analyze-scenario] GPT-4o returned only %d scenes — below minimum of 4",
+                len(parsed.get("scenes", [])),
+            )
     except Exception as e:
         logger.warning("GPT-4o scenario analysis failed: %s — using mock fallback", e)
         scenes, total_duration = _generate_mock_scenes(request.scenario, request.mode)

@@ -42,6 +42,8 @@ export interface BrandAnalysis {
   tone: string;
   colors: string[];
   keywords: string[];
+  mood?: string;
+  prompt_prefix?: string;
 }
 
 export interface Scene {
@@ -81,6 +83,10 @@ export interface GenerateRequest {
   lora_model_id?: string;
   product_images?: string[];
   brand_logo?: string;
+  brand_colors?: string[];
+  brand_mood?: string;
+  brand_prompt_prefix?: string;
+  aspect_ratio?: string;
 }
 
 // ── Existing API functions (v1) ──────────────────────────────────────
@@ -149,25 +155,36 @@ export async function analyzeBrand(url: string): Promise<BrandAnalysis> {
   return handleResponse<BrandAnalysis>(res);
 }
 
+export interface AnalyzeScenarioParams {
+  scenario: string;
+  mode: string;
+  industry: string;
+  brand_name?: string;
+  duration?: number;
+  platforms?: string[];
+  brand_colors?: string[];
+  brand_mood?: string;
+  brand_keywords?: string[];
+}
+
 export async function analyzeScenario(
-  scenario: string,
-  mode: string,
-  industry: string,
+  params: AnalyzeScenarioParams,
 ): Promise<SceneBreakdown> {
   const res = await fetch(`${API_BASE}/analyze-scenario`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scenario, mode, industry }),
+    body: JSON.stringify(params),
   });
   const raw = await handleResponse<any>(res);
   // Map backend field names to frontend Scene interface
   const scenes: Scene[] = (raw.scenes || []).map((s: any) => ({
     id: s.scene_number ?? s.id,
     type: s.type,
-    description: s.description,
-    duration: s.duration_seconds ?? s.duration,
+    description: s.description ?? s.original_text ?? "",
+    duration: s.duration_seconds ?? s.duration ?? 3,
     camera_movement: s.camera_movement || "static",
     transition: s.transition || "cut",
+    prompt: s.prompt_image || s.prompt || undefined,
   }));
   return {
     scenes,

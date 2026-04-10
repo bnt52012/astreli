@@ -4,7 +4,90 @@ System prompts for GPT-4o scenario analysis.
 TWO system prompts:
   1. MIXED mode (personnage + produit) - must tag scenes with mannequin as "personnage"
   2. PRODUCT-ONLY mode - all scenes are "produit" or "transition"
+
+Plus a builder for the USER prompt that injects runtime brand/duration/platform context
+so the GPT-4o output is tightly bound to the actual delivery target.
 """
+
+from typing import List, Optional
+
+
+def _platforms_to_aspect_ratio(platforms: Optional[List[str]]) -> str:
+    if not platforms:
+        return "9:16"
+    p = [s.lower() for s in platforms]
+    if any(k in s for s in p for k in ("reel", "tiktok", "short", "story")):
+        return "9:16"
+    if any(k in s for s in p for k in ("linkedin", "square")):
+        return "1:1"
+    if any(k in s for s in p for k in ("youtube", "16:9", "landscape")):
+        return "16:9"
+    return "9:16"
+
+
+def build_scenario_user_prompt(
+    scenario: str,
+    *,
+    brand_name: Optional[str] = None,
+    industry: Optional[str] = None,
+    duration: int = 30,
+    platforms: Optional[List[str]] = None,
+    brand_colors: Optional[List[str]] = None,
+    brand_mood: Optional[str] = None,
+    brand_keywords: Optional[List[str]] = None,
+) -> str:
+    """Build the user prompt sent alongside the system prompt to GPT-4o.
+
+    Injects the actual delivery target (aspect ratio, total duration, brand voice)
+    so GPT-4o decomposes the scenario specifically for THIS ad — not in the abstract.
+    """
+    aspect = _platforms_to_aspect_ratio(platforms)
+    target_scenes_min = max(4, min(6, max(4, duration // 4)))
+    target_scenes_max = min(6, max(target_scenes_min, duration // 3))
+
+    lines: List[str] = []
+    lines.append("=== DELIVERY TARGET ===")
+    if brand_name:
+        lines.append(f"Brand: {brand_name}")
+    if industry:
+        lines.append(f"Industry: {industry}")
+    if platforms:
+        lines.append(f"Platforms: {', '.join(platforms)}")
+    lines.append(f"Aspect ratio: {aspect}")
+    lines.append(f"Total video duration: {duration} seconds")
+    lines.append(
+        f"Required scene count: {target_scenes_min}-{target_scenes_max} scenes "
+        f"(NEVER fewer than 4)"
+    )
+    lines.append(
+        f"Per-scene duration MUST average ~{duration / max(4, target_scenes_min):.1f}s "
+        f"so the total adds up to ~{duration}s."
+    )
+
+    if brand_colors or brand_mood or brand_keywords:
+        lines.append("")
+        lines.append("=== BRAND VOICE (apply to every prompt_image and prompt_video) ===")
+        if brand_colors:
+            lines.append(f"Brand colors: {', '.join(brand_colors)}")
+        if brand_mood:
+            lines.append(f"Brand tone/mood: {brand_mood}")
+        if brand_keywords:
+            lines.append(f"Brand keywords: {', '.join(brand_keywords[:8])}")
+        lines.append(
+            "Every scene's prompt_image MUST visually reflect this brand voice "
+            "(color palette, lighting mood, materials, atmosphere)."
+        )
+
+    lines.append("")
+    lines.append("=== CLIENT SCENARIO (SACRED — do not rewrite, only decompose) ===")
+    lines.append(scenario.strip())
+    lines.append("")
+    lines.append(
+        "Now produce the JSON breakdown. Remember: 4-6 scenes, total duration "
+        f"~{duration}s, aspect ratio {aspect}, brand voice baked into every prompt."
+    )
+    return "\n".join(lines)
+
 
 SYSTEM_PROMPT_MIXED = """You are a world-class advertising art director AI. Your job is to decompose a client's advertising scenario into MULTIPLE individual scenes for an AI video production pipeline.
 
@@ -15,7 +98,7 @@ CRITICAL RULES:
 DECOMPOSITION RULES (VERY IMPORTANT):
 - Each distinct visual moment, camera angle, or subject change MUST be a SEPARATE scene.
 - A single sentence can become 1-2 scenes if it describes multiple visual moments.
-- Target: 4-6 scenes for a typical scenario. NEVER return fewer than 3 scenes.
+- HARD REQUIREMENT: You MUST return between 4 and 6 scenes. Returning fewer than 4 is FORBIDDEN. If the client's text seems short, you must still extract 4-6 distinct visual moments by breaking it into camera angles and detail shots (establishing, medium, close-up, macro, endframe).
 - Each scene = ONE camera shot. If the camera changes position, framing, or subject, that is a NEW scene.
 - Examples of scene breaks: new subject in frame, new camera angle, new location, new action, logo/text reveal.
 
@@ -67,7 +150,7 @@ CRITICAL RULES:
 DECOMPOSITION RULES (VERY IMPORTANT):
 - Each distinct visual moment, camera angle, or subject change MUST be a SEPARATE scene.
 - A single sentence can become 1-2 scenes if it describes multiple visual moments.
-- Target: 4-6 scenes for a typical scenario. NEVER return fewer than 3 scenes.
+- HARD REQUIREMENT: You MUST return between 4 and 6 scenes. Returning fewer than 4 is FORBIDDEN. If the client's text seems short, you must still extract 4-6 distinct visual moments by breaking it into camera angles and detail shots (establishing, medium, close-up, macro, endframe).
 - Each scene = ONE camera shot. If the camera changes position, framing, or subject, that is a NEW scene.
 - Examples of scene breaks: new angle on product, new environment, new detail level (wide→macro), new action (pour, rotate, reveal), logo/endframe.
 
