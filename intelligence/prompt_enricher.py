@@ -16,6 +16,11 @@ from typing import Any
 
 from intelligence.scene_understanding import SceneContext, SceneUnderstanding
 from knowledge.knowledge_engine import KnowledgeEngine
+from knowledge.prompt_templates.kling_video_prompts import (
+    build_kling_video_prompt,
+    detect_subject_animations,
+    mood_for_industry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -98,38 +103,65 @@ class PromptEnricher:
         original_prompt: str,
         scene_context: SceneContext,
         industry: str = "luxury",
+        camera_movement: str | None = None,
+        duration_seconds: float = 5.0,
+        mood: str | None = None,
+        extra_description: str = "",
     ) -> str:
-        """Enrich a video animation prompt.
+        """Enrich a video animation prompt using the Kling-optimized builder.
+
+        Delegates to ``build_kling_video_prompt`` so the full specialized
+        library (camera directives, subject physics, mood, technical tail)
+        is applied consistently for every scene.
 
         Args:
-            original_prompt: Client's video prompt.
-            scene_context: Scene technical understanding.
-            industry: Detected industry.
+            original_prompt: Client's video prompt from GPT-4o (describes what
+                HAPPENS in the scene).
+            scene_context: Scene technical understanding, used to auto-derive
+                camera movement when none is provided explicitly.
+            industry: Detected industry (used to pick a default mood).
+            camera_movement: Explicit camera movement key
+                (static/dolly_in/orbit/...). Falls back to the scene context.
+            duration_seconds: Target clip duration.
+            mood: Explicit mood key. Falls back to the industry default.
+            extra_description: Optional additional scene content (e.g. the
+                prompt_image) appended to the subject line so Kling sees the
+                environment too.
 
         Returns:
-            Enriched video prompt.
+            The fully optimized Kling prompt (single string, ready to send).
         """
-        enrichment = self.knowledge.get_video_enrichment(
-            industry=industry,
-            scene_context=scene_context,
+        # 1. Build the subject line = GPT-4o's prompt_video + optional extra
+        base_content = (original_prompt or "").strip()
+        if extra_description and extra_description.strip():
+            if base_content:
+                base_content = f"{base_content.rstrip('.')}. {extra_description.strip().rstrip('.')}"
+            else:
+                base_content = extra_description.strip()
+
+        # 2. Resolve camera movement (explicit > scene context > static)
+        cam = (camera_movement or scene_context.implied_camera_movement or "static").lower()
+
+        # 3. Detect subject animations from the subject line
+        animations = detect_subject_animations(base_content, max_animations=3)
+
+        # 4. Pick a mood (explicit > industry default > luxury)
+        resolved_mood = (mood or mood_for_industry(industry)).lower()
+
+        # 5. Build the full optimized prompt
+        kling_prompt = build_kling_video_prompt(
+            scene_description=base_content,
+            camera_movement=cam,
+            subject_animations=animations,
+            mood=resolved_mood,
+            duration_seconds=duration_seconds,
         )
 
-        parts = [original_prompt.strip()]
-        if enrichment:
-            parts.append(enrichment)
-
-        # Add Kling-specific hints from scene understanding
-        kling_hints = scene_context.kling_hints
-        if kling_hints.get("motion_prompt"):
-            parts.append(kling_hints["motion_prompt"])
-        if kling_hints.get("speed_modifier"):
-            parts.append(kling_hints["speed_modifier"])
-        if kling_hints.get("camera_prompt"):
-            parts.append(kling_hints["camera_prompt"])
-        if kling_hints.get("atmosphere"):
-            parts.append(kling_hints["atmosphere"])
-
-        return ". ".join(p.rstrip(".") for p in parts if p)
+        logger.debug(
+            "Kling video prompt: cam=%s mood=%s animations=%s → %d chars",
+            cam, resolved_mood, animations, len(kling_prompt),
+        )
+        return kling_prompt
 
     def enrich_mannequin_prompt(
         self,
@@ -236,13 +268,23 @@ class PromptEnricher:
             scene_type=archetype,
         )
 
-        # 5. Enrich video prompt
-        original_video = scene_data.get("prompt_video", "")
-        if original_video:
+        # 5. Enrich video prompt via the Kling-optimized builder.
+        # Falls back to prompt_image if GPT-4o didn't provide prompt_video so
+        # Kling still receives the scene content.
+        original_video = scene_data.get("prompt_video") or ""
+        fallback_desc = scene_data.get("prompt_image") or description or ""
+        cam_movement = scene_data.get("camera_movement") or ""
+        scene_duration = float(
+            scene_data.get("duration_seconds", scene_data.get("duration", 5.0)) or 5.0
+        )
+        if original_video or fallback_desc:
             result["prompt_video"] = self.enrich_video_prompt(
-                original_prompt=original_video,
+                original_prompt=original_video or fallback_desc,
                 scene_context=scene_context,
                 industry=industry,
+                camera_movement=cam_movement or None,
+                duration_seconds=scene_duration,
+                extra_description=fallback_desc if original_video else "",
             )
 
         # 6. Store archetype and context for downstream pipeline

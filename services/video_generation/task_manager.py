@@ -78,9 +78,19 @@ class FalVideoTaskManager:
             )
             logger.warning("Fal received EMPTY prompt — using neutral fallback")
 
+        # Fal's prompt field accepts up to 2500 chars. We send the FULL
+        # Kling-optimized prompt from build_kling_video_prompt(); the only
+        # clipping is Fal's own hard limit.
+        final_prompt = safe_prompt[:2500]
+        if len(safe_prompt) > 2500:
+            logger.warning(
+                "Fal prompt truncated from %d → 2500 chars (model hard limit)",
+                len(safe_prompt),
+            )
+
         arguments = {
             "image_url": image_url,
-            "prompt": safe_prompt[:2500],
+            "prompt": final_prompt,
             "duration": dur_str,
             "aspect_ratio": aspect_ratio,
         }
@@ -106,7 +116,7 @@ class FalVideoTaskManager:
         print(f"\n{'='*60}", flush=True)
         print(f"FAL VIDEO PROMPT FOR SCENE:", flush=True)
         print(f"Model: {model}", flush=True)
-        print(f"Prompt: {safe_prompt}", flush=True)
+        print(f"Prompt ({len(final_prompt)} chars): {final_prompt}", flush=True)
         print(f"Duration: {dur_str}", flush=True)
         print(f"Aspect: {aspect_ratio}", flush=True)
         print(f"{'='*60}\n", flush=True)

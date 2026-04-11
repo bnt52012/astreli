@@ -339,6 +339,9 @@ class GenerateRequest(BaseModel):
     style: Optional[str] = None
     platforms: List[str] = []
     duration: int = 30
+    # Product metadata from the frontend "Brand Setup" step
+    product_name: Optional[str] = None
+    product_category: Optional[str] = None
     # Reference images as base64 data URLs (data:image/png;base64,...) or bare base64.
     product_images: List[str] = []
     brand_logo: Optional[str] = None
@@ -806,33 +809,37 @@ async def generate_video(request: GenerateRequest, background_tasks: BackgroundT
             raw_transition = sd.get("transition", "cut")
             scene_duration = float(sd.get("duration_seconds", sd.get("duration", 3.5)))
 
-            # ── Build cinematic VIDEO prompt (Problems 1, 4, 7) ──────
-            # CRITICAL: The SCENE CONTENT from GPT-4o must come FIRST so Kling
-            # knows WHAT is in the shot before we tell it HOW to move the
-            # camera. Putting camera directives first (or alone) produced
-            # ambient motion on a subject Kling had to guess at.
-            raw_video_prompt = (sd.get("prompt_video") or "").strip()
-            camera_directive = _CAMERA_PROMPT.get(raw_camera, _CAMERA_PROMPT["static"])
+            # ── Build cinematic VIDEO prompt via Kling-optimized builder ──
+            # The builder knows how to talk to Kling: scene content first,
+            # then camera directive + details, then subject physics auto-
+            # detected from keywords, then mood, then technical tail.
+            from knowledge.prompt_templates.kling_video_prompts import (
+                build_kling_video_prompt,
+                detect_subject_animations,
+                mood_for_industry,
+            )
 
-            video_parts: list[str] = []
-            if raw_video_prompt:
-                video_parts.append(raw_video_prompt)
-            else:
-                # Last-resort fallback: if GPT-4o didn't give us prompt_video,
-                # at least describe the scene content from prompt_image so
-                # Kling has something to animate.
-                fallback = (sd.get("prompt_image") or sd.get("description") or "").strip()
-                if fallback:
-                    video_parts.append(fallback)
-            video_parts.append(camera_directive)
-            video_parts.extend([
-                "Very slow, luxurious pace",
-                "Smooth cinematic motion",
-                "Rock-solid stable footage, no camera shake",
-                "24fps, physically accurate material movement",
-                f"Duration: {scene_duration:.1f} seconds",
-            ])
-            cinematic_video_prompt = ". ".join(p for p in video_parts if p)
+            raw_video_prompt = (sd.get("prompt_video") or "").strip()
+            raw_image_for_fallback = (sd.get("prompt_image") or sd.get("description") or "").strip()
+            subject_line = raw_video_prompt or raw_image_for_fallback
+
+            auto_animations = detect_subject_animations(
+                " ".join([subject_line, raw_image_for_fallback]).strip(),
+                max_animations=3,
+            )
+            resolved_mood = (
+                request.brand_mood.lower()
+                if request.brand_mood
+                else mood_for_industry(request.product_category)
+            )
+
+            cinematic_video_prompt = build_kling_video_prompt(
+                scene_description=subject_line,
+                camera_movement=raw_camera,
+                subject_animations=auto_animations,
+                mood=resolved_mood,
+                duration_seconds=scene_duration,
+            )
 
             # ── Build cinematic IMAGE prompt (Problems 2, 7) ─────────
             raw_image_prompt = sd.get("prompt_image", sd.get("description", ""))
