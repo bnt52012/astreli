@@ -599,6 +599,17 @@ async def analyze_scenario(request: ScenarioAnalyzeRequest):
             parsed.get("total_scenes", "?"),
             parsed.get("estimated_duration", "?"),
         )
+
+        # ── URGENT DEBUG: dump every scene returned by GPT-4o ────────
+        for scene in parsed.get("scenes", []):
+            print(f"\n--- SCENE {scene.get('scene_number', scene.get('index', '?'))} ---", flush=True)
+            print(f"Type: {scene.get('scene_type')}", flush=True)
+            print(f"Camera: {scene.get('camera_movement')}", flush=True)
+            print(f"Duration: {scene.get('duration_seconds')}s", flush=True)
+            print(f"prompt_image: {(scene.get('prompt_image') or 'EMPTY')[:200]}", flush=True)
+            print(f"prompt_video: {(scene.get('prompt_video') or 'EMPTY')[:200]}", flush=True)
+            print(f"---", flush=True)
+
         # Hard guard: if GPT-4o returned fewer than 3 scenes, log and let downstream handle it
         if len(parsed.get("scenes", [])) < 3:
             logger.warning(
@@ -796,20 +807,32 @@ async def generate_video(request: GenerateRequest, background_tasks: BackgroundT
             scene_duration = float(sd.get("duration_seconds", sd.get("duration", 3.5)))
 
             # ── Build cinematic VIDEO prompt (Problems 1, 4, 7) ──────
-            raw_video_prompt = sd.get("prompt_video", "")
+            # CRITICAL: The SCENE CONTENT from GPT-4o must come FIRST so Kling
+            # knows WHAT is in the shot before we tell it HOW to move the
+            # camera. Putting camera directives first (or alone) produced
+            # ambient motion on a subject Kling had to guess at.
+            raw_video_prompt = (sd.get("prompt_video") or "").strip()
             camera_directive = _CAMERA_PROMPT.get(raw_camera, _CAMERA_PROMPT["static"])
-            video_parts = [camera_directive]
+
+            video_parts: list[str] = []
             if raw_video_prompt:
-                video_parts.append(raw_video_prompt.strip())
-            # Add cinematic video quality suffix
+                video_parts.append(raw_video_prompt)
+            else:
+                # Last-resort fallback: if GPT-4o didn't give us prompt_video,
+                # at least describe the scene content from prompt_image so
+                # Kling has something to animate.
+                fallback = (sd.get("prompt_image") or sd.get("description") or "").strip()
+                if fallback:
+                    video_parts.append(fallback)
+            video_parts.append(camera_directive)
             video_parts.extend([
-                "Very slow movement, luxurious and deliberate",
+                "Very slow, luxurious pace",
+                "Smooth cinematic motion",
                 "Rock-solid stable footage, no camera shake",
-                "Smooth 24fps cinematic motion",
-                "Physically accurate material movement",
+                "24fps, physically accurate material movement",
                 f"Duration: {scene_duration:.1f} seconds",
             ])
-            cinematic_video_prompt = ". ".join(video_parts)
+            cinematic_video_prompt = ". ".join(p for p in video_parts if p)
 
             # ── Build cinematic IMAGE prompt (Problems 2, 7) ─────────
             raw_image_prompt = sd.get("prompt_image", sd.get("description", ""))

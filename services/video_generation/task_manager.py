@@ -66,9 +66,21 @@ class FalVideoTaskManager:
 
         # 2. Submit the job. Fal only supports "5" or "10" second durations.
         dur_str = "10" if float(duration) > 7.5 else "5"
+
+        # Safety net: Kling needs scene CONTENT, not just camera directives.
+        # If the caller only sent camera instructions (or nothing), add a
+        # neutral content hint so the model has a subject to animate.
+        safe_prompt = (prompt or "").strip()
+        if not safe_prompt:
+            safe_prompt = (
+                "Cinematic subtle motion on the subject in the reference image, "
+                "preserving composition and lighting exactly."
+            )
+            logger.warning("Fal received EMPTY prompt — using neutral fallback")
+
         arguments = {
             "image_url": image_url,
-            "prompt": (prompt or "Cinematic subtle motion")[:2500],
+            "prompt": safe_prompt[:2500],
             "duration": dur_str,
             "aspect_ratio": aspect_ratio,
         }
@@ -90,6 +102,14 @@ class FalVideoTaskManager:
             "Fal SUBMIT → %s | duration=%s aspect=%s prompt_len=%d",
             model, dur_str, aspect_ratio, len(prompt or ""),
         )
+
+        print(f"\n{'='*60}", flush=True)
+        print(f"FAL VIDEO PROMPT FOR SCENE:", flush=True)
+        print(f"Model: {model}", flush=True)
+        print(f"Prompt: {safe_prompt}", flush=True)
+        print(f"Duration: {dur_str}", flush=True)
+        print(f"Aspect: {aspect_ratio}", flush=True)
+        print(f"{'='*60}\n", flush=True)
 
         try:
             result = await loop.run_in_executor(

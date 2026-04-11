@@ -54,6 +54,10 @@ export interface Scene {
   camera_movement: string;
   transition: string;
   prompt?: string;
+  prompt_image?: string;
+  prompt_video?: string;
+  original_text?: string;
+  needs_mannequin?: boolean;
 }
 
 export interface SceneBreakdown {
@@ -176,15 +180,22 @@ export async function analyzeScenario(
     body: JSON.stringify(params),
   });
   const raw = await handleResponse<any>(res);
-  // Map backend field names to frontend Scene interface
+  // Map backend field names to frontend Scene interface.
+  // CRITICAL: preserve prompt_image AND prompt_video end-to-end so the
+  // GPT-4o content round-trips into /api/generate — without this, the Fal
+  // video prompt collapses to camera directives only.
   const scenes: Scene[] = (raw.scenes || []).map((s: any) => ({
     id: s.scene_number ?? s.id,
     type: s.type,
-    description: s.description ?? s.original_text ?? "",
+    description: s.description ?? s.prompt_image ?? s.original_text ?? "",
     duration: s.duration_seconds ?? s.duration ?? 3,
     camera_movement: s.camera_movement || "static",
     transition: s.transition || "cut",
     prompt: s.prompt_image || s.prompt || undefined,
+    prompt_image: s.prompt_image || undefined,
+    prompt_video: s.prompt_video || undefined,
+    original_text: s.original_text || undefined,
+    needs_mannequin: s.needs_mannequin,
   }));
   return {
     scenes,
