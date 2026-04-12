@@ -18,8 +18,10 @@ Designed to be compatible with future data sources:
 """
 from __future__ import annotations
 
+import json
 import logging
 import random
+from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -28,6 +30,39 @@ if TYPE_CHECKING:
 from knowledge.industry_detector import IndustryDetector, IndustryMatch
 
 logger = logging.getLogger(__name__)
+
+
+# ── Real-ads dataset location ───────────────────────────────────────────
+# Populated by generate_real_ad_analyses.py — 1000 shot-by-shot breakdowns
+# of real iconic campaigns. Each JSON file has a `plans` array where every
+# plan carries a gold-standard `kling_prompt` and `gemini_prompt` field.
+
+REAL_ADS_DIR = Path("dataset/real_ads")
+
+
+# Map archetype → preferred shot_size buckets (from generate_real_ad_analyses.py
+# schema). Lets us find training examples whose framing matches the scene we
+# are currently enriching.
+_ARCHETYPE_TO_SHOT_SIZE: dict[str, list[str]] = {
+    "product_hero_shot": ["close_up", "medium_close"],
+    "macro_detail": ["extreme_close_up", "close_up"],
+    "model_portrait_closeup": ["close_up", "medium_close"],
+    "hands_only": ["close_up", "medium_close"],
+    "product_interaction": ["close_up", "medium_close", "medium"],
+    "packshot_endframe": ["medium_close", "close_up"],
+    "ingredient_component": ["extreme_close_up", "close_up"],
+    "unboxing_reveal": ["close_up", "medium"],
+    "lifestyle_context": ["medium", "medium_close", "wide"],
+    "slow_motion_moment": ["close_up", "medium_close"],
+    "motion_action": ["medium", "wide"],
+    "environment_establishing": ["wide", "extreme_wide"],
+    "aerial_drone": ["extreme_wide", "wide"],
+    "pov_first_person": ["medium", "medium_close"],
+    "silhouette_artistic": ["medium", "wide"],
+    "reflection_mirror": ["close_up", "medium_close"],
+    "before_after_transform": ["medium_close", "medium"],
+    "call_to_action": ["medium_close", "medium"],
+}
 
 
 # ── Archetype detection keywords ────────────────────────────────────────
@@ -118,6 +153,9 @@ class KnowledgeEngine:
     def __init__(self) -> None:
         self.detector = IndustryDetector()
         self._patterns_cache: dict[str, dict[str, Any]] = {}
+        # Real-ads cache: industry_key → list of ad dicts (each with `plans`)
+        self._real_ads_cache: dict[str, list[dict[str, Any]]] | None = None
+        self._real_ads_loaded = False
 
     # ── Industry detection ──────────────────────────────────────────
 
@@ -158,6 +196,177 @@ class KnowledgeEngine:
                 best_archetype = archetype
 
         return best_archetype
+
+    # ── Real-ad analyses (gold-standard training examples) ─────────
+
+    def load_real_ads(self, force: bool = False) -> int:
+        """Lazy-load 1000 real-ad breakdowns into an in-memory index.
+
+        Walks ``dataset/real_ads/<industry>/*.json`` and groups records by
+        industry key. Safe to call multiple times — returns immediately on
+        subsequent calls unless ``force=True``.
+
+        Returns:
+            Number of ads loaded (0 if the directory is missing or empty).
+        """
+        if self._real_ads_loaded and not force:
+            return sum(len(v) for v in (self._real_ads_cache or {}).values())
+
+        cache: dict[str, list[dict[str, Any]]] = {}
+        if not REAL_ADS_DIR.exists():
+            self._real_ads_cache = cache
+            self._real_ads_loaded = True
+            logger.info("Real-ads directory %s not found — skipping", REAL_ADS_DIR)
+            return 0
+
+        total = 0
+        for path in REAL_ADS_DIR.rglob("*.json"):
+            if path.name.startswith("_"):
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as e:
+                logger.debug("Skip real-ad %s: %s", path, e)
+                continue
+            plans = data.get("plans") or []
+            if not plans:
+                continue
+            industry_key = (
+                data.get("_industry_key")
+                or data.get("industry")
+                or "unknown"
+            ).lower()
+            cache.setdefault(industry_key, []).append(data)
+            total += 1
+
+        self._real_ads_cache = cache
+        self._real_ads_loaded = True
+        logger.info(
+            "Real-ads loaded: %d ads across %d industries",
+            total, len(cache),
+        )
+        return total
+
+    def find_similar_real_ads(
+        self,
+        industry: str,
+        archetype: str = "",
+        shot_size: str = "",
+        camera_movement: str = "",
+        n: int = 3,
+    ) -> list[dict[str, Any]]:
+        """Return up to ``n`` matching (ad, plan) pairs for a target scene.
+
+        Matches first by industry, then filters plans by shot_size derived
+        from the archetype, then (optionally) by camera movement. Each
+        returned dict is flat: {brand, agency, campaign_name, plan}.
+
+        Args:
+            industry: Industry key (luxury_fashion, beauty_cosmetics, …).
+            archetype: Scene archetype key; maps to preferred shot_size list.
+            shot_size: Explicit shot_size override (takes precedence over
+                the archetype mapping).
+            camera_movement: Optional secondary filter.
+            n: Maximum number of examples to return.
+
+        Returns:
+            List of dicts with keys: brand, agency, campaign_name, plan.
+        """
+        self.load_real_ads()
+        cache = self._real_ads_cache or {}
+        if not cache:
+            return []
+
+        industry_key = (industry or "").lower()
+        pool: list[dict[str, Any]] = cache.get(industry_key, [])
+        if not pool:
+            # Loose fallback: any ad whose industry string starts with ours
+            for k, v in cache.items():
+                if k.startswith(industry_key) or industry_key.startswith(k):
+                    pool.extend(v)
+            if not pool:
+                return []
+
+        preferred_sizes = [shot_size] if shot_size else _ARCHETYPE_TO_SHOT_SIZE.get(
+            archetype, []
+        )
+
+        # Score every (ad, plan) combination.
+        scored: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
+        for ad in pool:
+            for plan in ad.get("plans", []) or []:
+                score = 0
+                p_size = (plan.get("shot_size") or "").lower()
+                if preferred_sizes and p_size in preferred_sizes:
+                    score += 3 if p_size == (preferred_sizes[0] if preferred_sizes else "") else 2
+                if camera_movement and (plan.get("camera_movement") or "").lower() == camera_movement.lower():
+                    score += 2
+                if plan.get("kling_prompt") and plan.get("gemini_prompt"):
+                    score += 1  # complete plans preferred
+                if score > 0:
+                    scored.append((score, ad, plan))
+
+        if not scored:
+            # Fallback: take random plans from this industry pool
+            fallback: list[dict[str, Any]] = []
+            random.shuffle(pool)
+            for ad in pool:
+                for plan in ad.get("plans", []) or []:
+                    if plan.get("kling_prompt") and plan.get("gemini_prompt"):
+                        fallback.append({
+                            "brand": ad.get("brand", ""),
+                            "agency": ad.get("agency", ""),
+                            "campaign_name": ad.get("campaign_name", ""),
+                            "plan": plan,
+                        })
+                        break
+                if len(fallback) >= n:
+                    break
+            return fallback[:n]
+
+        scored.sort(key=lambda t: t[0], reverse=True)
+        results: list[dict[str, Any]] = []
+        seen_ads: set[int] = set()
+        for score, ad, plan in scored:
+            ad_id = id(ad)
+            if ad_id in seen_ads:
+                continue  # avoid picking two plans from the same campaign
+            seen_ads.add(ad_id)
+            results.append({
+                "brand": ad.get("brand", ""),
+                "agency": ad.get("agency", ""),
+                "campaign_name": ad.get("campaign_name", ""),
+                "plan": plan,
+            })
+            if len(results) >= n:
+                break
+        return results
+
+    def build_real_ad_reference(
+        self,
+        examples: list[dict[str, Any]],
+        field: str,
+    ) -> str:
+        """Format matched real-ad examples as a single reference line.
+
+        Args:
+            examples: Output of ``find_similar_real_ads``.
+            field: Either ``kling_prompt`` or ``gemini_prompt``.
+
+        Returns:
+            A human-readable reference string (empty if no usable examples).
+        """
+        if not examples:
+            return ""
+        lines: list[str] = []
+        for ex in examples:
+            plan = ex.get("plan") or {}
+            text = (plan.get(field) or "").strip()
+            if not text:
+                continue
+            brand = ex.get("brand") or "an award-winning brand"
+            lines.append(f'Reference style from "{brand}" campaign: {text}')
+        return " ".join(lines)
 
     # ── Image prompt enrichment ─────────────────────────────────────
 
@@ -231,7 +440,20 @@ class KnowledgeEngine:
             if ctx_enrichment:
                 parts.append(ctx_enrichment)
 
-        # 7. Base quality
+        # 7. Real-ad reference (gold-standard gemini_prompt from similar shots)
+        try:
+            examples = self.find_similar_real_ads(
+                industry=industry,
+                archetype=archetype,
+                n=2,
+            )
+            ref = self.build_real_ad_reference(examples, "gemini_prompt")
+            if ref:
+                parts.append(ref)
+        except Exception as e:
+            logger.debug("real-ad image enrichment skipped: %s", e)
+
+        # 8. Base quality
         parts.append("8K resolution, photorealistic, professional advertising photograph")
 
         return ", ".join(parts)
@@ -274,6 +496,26 @@ class KnowledgeEngine:
 
             if scene_context.implied_subject_motion:
                 parts.append(scene_context.implied_subject_motion)
+
+        # Real-ad reference (gold-standard kling_prompt from similar shots)
+        try:
+            archetype_hint = self.detect_archetype(original_prompt or "")
+            cam_hint = (
+                scene_context.implied_camera_movement
+                if scene_context is not None
+                else ""
+            )
+            examples = self.find_similar_real_ads(
+                industry=industry,
+                archetype=archetype_hint,
+                camera_movement=cam_hint or "",
+                n=2,
+            )
+            ref = self.build_real_ad_reference(examples, "kling_prompt")
+            if ref:
+                parts.append(ref)
+        except Exception as e:
+            logger.debug("real-ad video enrichment skipped: %s", e)
 
         return ", ".join(parts)
 

@@ -157,6 +157,27 @@ class PromptEnricher:
             duration_seconds=duration_seconds,
         )
 
+        # 6. Blend in a gold-standard real-ad reference line if we have one.
+        # This gives Kling a concrete stylistic anchor from the 1000 real
+        # campaign breakdowns (generate_real_ad_analyses.py → dataset/real_ads).
+        try:
+            archetype_hint = self.knowledge.detect_archetype(base_content)
+            examples = self.knowledge.find_similar_real_ads(
+                industry=industry,
+                archetype=archetype_hint,
+                camera_movement=cam,
+                n=1,
+            )
+            ref = self.knowledge.build_real_ad_reference(examples, "kling_prompt")
+            if ref:
+                kling_prompt = f"{kling_prompt.rstrip('.')}. {ref}"
+                logger.debug(
+                    "Kling prompt augmented with real-ad reference (%d chars)",
+                    len(ref),
+                )
+        except Exception as e:
+            logger.debug("real-ad kling reference skipped: %s", e)
+
         logger.debug(
             "Kling video prompt: cam=%s mood=%s animations=%s → %d chars",
             cam, resolved_mood, animations, len(kling_prompt),

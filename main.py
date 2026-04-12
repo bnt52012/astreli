@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import random
 import sys
 import uuid as uuid_mod
@@ -24,6 +25,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional
 from urllib.parse import urlparse
+
+try:
+    from dotenv import load_dotenv
+    # Load .env before reading fine-tune ID so run_finetuning.py writes are picked up.
+    load_dotenv()
+except ImportError:
+    pass
+
+# Fine-tuned model ID (written by run_finetuning.py on success). Falls back to
+# vanilla gpt-4o for /api/analyze-scenario if unset or if the FT call errors.
+FINETUNED_MODEL_ID = os.environ.get("FINETUNED_MODEL_ID", "").strip() or None
+SCENARIO_FALLBACK_MODEL = "gpt-4o"
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -63,6 +76,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def _startup_warm_caches() -> None:
+    """Warm expensive caches at boot so the first request isn't slow.
+
+    - Loads the 1000 real-ad analyses (dataset/real_ads/) into KnowledgeEngine.
+    - Logs whether a fine-tuned scenario model will be used.
+    """
+    try:
+        from knowledge.knowledge_engine import KnowledgeEngine
+        ke = KnowledgeEngine()
+        count = ke.load_real_ads()
+        logger.info("[startup] real-ad analyses loaded: %d", count)
+    except Exception as e:
+        logger.warning("[startup] failed to warm real-ads cache: %s", e)
+
+    if FINETUNED_MODEL_ID:
+        logger.info(
+            "[startup] scenario model: FINETUNED_MODEL_ID=%s (fallback=%s)",
+            FINETUNED_MODEL_ID, SCENARIO_FALLBACK_MODEL,
+        )
+    else:
+        logger.info(
+            "[startup] scenario model: %s (no fine-tuned model set)",
+            SCENARIO_FALLBACK_MODEL,
+        )
 
 # ── In-memory job tracking ───────────────────────────────────────────
 _jobs: dict[str, dict[str, Any]] = {}
@@ -580,24 +620,50 @@ async def analyze_scenario(request: ScenarioAnalyzeRequest):
     logger.debug("[analyze-scenario] system_prompt=\n%s", system_prompt)
     logger.debug("[analyze-scenario] user_prompt=\n%s", user_prompt)
 
-    # 6. Call GPT-4o
+    # 6. Call the scenario model. Prefer the fine-tuned model if FINETUNED_MODEL_ID
+    # is set in .env (written by run_finetuning.py on success); fall back to
+    # gpt-4o transparently on any error (model not found, rate limit, etc.).
     try:
         from openai import OpenAI
         client = OpenAI(api_key=settings.openai_api_key)
-        resp = client.chat.completions.create(
-            model="gpt-4o",
-            temperature=0.3,
-            max_tokens=8192,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
+
+        primary_model = FINETUNED_MODEL_ID or SCENARIO_FALLBACK_MODEL
+        models_to_try: list[str] = [primary_model]
+        if FINETUNED_MODEL_ID and SCENARIO_FALLBACK_MODEL not in models_to_try:
+            models_to_try.append(SCENARIO_FALLBACK_MODEL)
+
+        resp = None
+        last_err: Exception | None = None
+        used_model: str | None = None
+        for candidate in models_to_try:
+            try:
+                logger.info("[analyze-scenario] calling model=%s", candidate)
+                resp = client.chat.completions.create(
+                    model=candidate,
+                    temperature=0.3,
+                    max_tokens=8192,
+                    response_format={"type": "json_object"},
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                )
+                used_model = candidate
+                break
+            except Exception as inner_err:
+                last_err = inner_err
+                logger.warning(
+                    "[analyze-scenario] model %s failed: %s — trying next",
+                    candidate, inner_err,
+                )
+        if resp is None:
+            raise last_err or RuntimeError("No scenario model responded")
+
         raw_content = resp.choices[0].message.content or "{}"
         parsed = json_mod.loads(raw_content)
         logger.info(
-            "[analyze-scenario] GPT-4o returned %d scenes (total_scenes=%s, estimated_duration=%s)",
+            "[analyze-scenario] %s returned %d scenes (total_scenes=%s, estimated_duration=%s)",
+            used_model,
             len(parsed.get("scenes", [])),
             parsed.get("total_scenes", "?"),
             parsed.get("estimated_duration", "?"),
